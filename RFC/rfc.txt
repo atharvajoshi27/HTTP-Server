@@ -1,3 +1,7 @@
+Reference : https://tools.ietf.org/html/rfc2616
+
+Important : https://tools.ietf.org/html/rfc2616#section-6
+
  Terminology
 
    This specification uses a number of terms to refer to the roles

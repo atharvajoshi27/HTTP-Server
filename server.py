@@ -65,11 +65,16 @@ class Decipher():
 			print("PATH EXISTS")
 			ext = os.path.splitext(path)[1]
 			print(f"EXT = {ext}")
-			if ext in ['.jpg', '.jpeg', '.png']:
-				if ext != '.png':
-					self.content_type = "image/jpeg"
-				else:
+			if ext in ['.jpg', '.jpeg', '.png', '.ico']:
+				if ext == '.png':
 					self.content_type = "image/png"
+					pass
+				elif ext == '.ico':
+					self.content_type = 'image/x-icon'
+					pass
+				else:
+					self.content_type = "image/jpeg"
+					pass
 				self.filemode = 'rb'
 			
 		else:
@@ -87,9 +92,10 @@ class Decipher():
 			self.f = open('badrequest.html', self.filemode)
 			path = "badrequest.html"
 		print(f"FILE MODE : {self.filemode}")
-		with open(path, self.filemode) as f:
-			self.content = f.read()
-			self.content_length = len(self.content)
+		f = open(path, self.filemode)
+		self.f = f
+		self.content = f.read()
+		self.content_length = len(self.content)
 	
 	def getmethod(self):
 		return self.method
@@ -119,9 +125,20 @@ class Decipher():
 		return f"Connection: {self.connection}"
 	
 	def getencoding(self):
-	#	if self.filemode == 'rb':
-			return "Content-Encoding: gzip\n"
-	#	return ''
+		if self.filemode == 'r':
+			return "Content-Encoding: gzip\r\n"
+		return ''
+		
+	def getfiledescriptor(self):
+		return self.f
+	
+	def getetag(self):
+		return "2000-5b159bc1b3eda"
+	
+	def getvary(self):
+		if self.filemode == 'r':
+			return "Vary: Accept-Encoding\r\n"
+		return ''
 		
 def gettime():
 	return time.strftime("%a, %d %b %Y %X GMT\n", time.gmtime())
@@ -138,8 +155,8 @@ def pathexists(path):
 def Listen(client, address):
 	while True:
 		try:
-			message = client.recv(1024).decode()
-			print(message)
+			message = client.recv(4096).decode()
+			print("MESSAGE: \n", message)
 			
 			'''
 			message = message.split()
@@ -167,8 +184,31 @@ def Listen(client, address):
 				'''
 				
 			d = Decipher(message)
-			response = f"{d.getstatus()}\n{d.acceptranges()}\n{d.getconnection()}\nDate: {d.gettime()}\nServer: {SERVER_NAME}\nContent-Length: {d.getcontentlength()}\nContent-Type: {d.getcontenttype()}\n\n{d.getcontent()}"
-			client.sendall(response.encode())
+			response = f"{d.getstatus()}\r\n{d.acceptranges()}\r\n{d.getconnection()}\r\nDate: {d.gettime()}\r\nServer: {SERVER_NAME}\r\nContent-Length: {d.getcontentlength()}\r\nContent-Type: {d.getcontenttype()}\r\n\r\n"
+			responses = [f"{d.getstatus()}\r\n", f"{d.acceptranges()}\r\n", f"{d.getconnection()}\r\n", f"Date: {d.gettime()}\r\n", f"Server: {SERVER_NAME}\r\n", f"Content-Length: {d.getcontentlength()}\r\n", f"Content-Type: {d.getcontenttype()}\r\n", f"\r\n{d.getcontent()}\r\n" ]
+			# for response in responses:
+			#	client.send(response.encode())
+			message_body = d.getcontent()
+			"""
+			k = int(len(response) / 4096)
+			p = 0
+			for i in range(0, k-1):
+				client.send(response[p:p+4096].encode())
+				p += 4096
+			"""
+			print("Response : ")
+			print(response)
+			client.send(response.encode())
+			
+			if d.filemode == 'rb':
+				print(message_body)
+				client.send(message_body)
+			else:
+				client.send(message_body.encode())
+			
+			# client.sendall(response.encode())
+			# client.sendfile(f)
+			
 			# client.sendall("\r\n".encode())
             #close the connection
 			# client.close()

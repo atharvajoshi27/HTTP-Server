@@ -5,98 +5,310 @@ import threading
 import datetime
 import time
 import gzip
+import logging
+import mimetypes
+import urllib
 
+def use_logger(method):
+	if method == "POST":
+		LOG_FORMAT = LOG_FORMAT = "%(levelname)s %(asctime)s : %(message)s"
+		logging.basicConfig(filename='POST_DATA.log', level=logging.DEBUG, format=LOG_FORMAT)
+		return logging.getLogger()
+
+ERROR_RESPONSE = """
+				<!DOCTYPE html>
+				<html>
+				    <head>
+				        <meta http-equiv="Content-Type" content="text/html;charset=utf-8">
+				        <title>Error response</title>
+				    </head>
+				    <body>
+				    	<p><b>%(code)s</b>. %(explain)s.</p>
+				    	<p>ERROR_HAS_OCCURED</p>
+				    </body>
+				</html>
+				"""
 # https://www.w3.org/Protocols/rfc2616/rfc2616-sec4.html#sec4.2
 
 SERVER_NAME = "Atharva's Server"
 
 BASE_DIR = "/home/atharva/Study/Sem_5/CN/HTTP-Server"
 
-class Decipher():
+CRLF = "\r\n"
+
+class RequestHandler():
 	method = "INVALID"
+	path = "/notimplemented.html"
 	connection = "Keep-Alive"
 	server = SERVER_NAME
 	root = BASE_DIR
-	gmttime = time.strftime("%a, %d %b %Y %X GMT", time.gmtime())
+	gmtime = time.strftime("%a, %d %b %Y %X GMT", time.gmtime())
 	content_length = 0
 	content = None
 	content_type = "text/html"
-	status_type = "OK"
-	status_code = 200
-	filemode = 'r'
+	scheme = "HTTP/1.1"
+	status_type = "Not Implemented"
+	status_code = 501
+	filemode = 'rb'
+	accept_ranges = "bytes"
+	allowed_methods = ["GET", "POST", "HEAD", "PUT", "DELETE",]
+	not_implemented_methods = ["CONNECT", "OPTIONS", "TRACE", "PATCH", ]
+	# types = {
+	# 	"get" : "GET",
+	# 	"head" : "HEAD", 
+	# 	"post" : "POST",
+	# 	"put" : "PUT",
+	# 	"delete" : "DELETE",
+	# }
 	
-	types = {
-		"get" : "GET",
-		"post" : "POST",
-		"put" : "PUT",
-		"delete" : "DELETE",
-	}
+	headers = {}
 	
 	def __init__(self, message=None):
-			message = message.split("\n")
-			method_info = message[0].split(" ")
-			print("METHOD INFO: ", method_info)
-			self.setmethod(method_info[0])
-			self.fileread(method_info[1])
-			
+		# print("MESSAGE: ")
+		# print(message)
+		self.setsetters(message)
+		# message = message.split("\r\n")
+		# method_info = message[0].split(" ")
+		# print("METHOD INFO: ", method_info)
+
+		# self.setmethod(message[0])
+		# self.setfile(message[0])
+		# if len(message) > 1:
+		# 	self.setheaders(message[1:])	
+		# self.callmethod()
+	def setsetters(self, message):
+		message = message.split("\r\n\r\n")
+		if len(message) > 1:
+			self.parameters = message[1]
+		else:
+			self.parameters = ''
+
+		msg = message[0].split("\r\n")
+
+		self.setmethod(msg[0])
+	
+		# self.setfile(msg[0])
+
+		if len(msg) > 1:
+			self.setheaders(msg[1:])
+
+		# print("CHECK :", message)
+		# print(len(message))
+
 	def setmethod(self, msg):
-		msg = msg.lower().split(" ")
-		print(msg)
-		if len(msg) < 1:
+		print("msg : ", msg)
+		msg = msg.split(" ")
+		# print(msg)
+		# print(len(msg))
+		# print(msg[2])
+		# msg = msg.lower().split(" ")
+		if len(msg) != 3 or msg[2] != "HTTP/1.1":
+			print("STEP 1")
 			self.status_type = "Bad Request"
 			self.status_code = 400
-			print("LENGTH ISSUES")
-		else:
-			try:
-				self.method = self.types[msg[0]]
-			except KeyError:
-				print("KEY ERROR")
-				self.status_type = "Bad Request"
-				self.status_code = 400
-	
-	def fileread(self, path):
-		print(f"PATH : {path}")
+			return
+
+		if msg[0] not in self.allowed_methods:
+			print("STEP 2")
+			if msg[0] in self.not_implemented_methods:
+				print("STEP 3")
+				self.status_code = 501
+				self.status_type = "Not Implemented"
+			else:
+				print("STEP 4")
+				self.status_code = 405
+				self.status_type = "Method Not Allowed"
+			return
+
+		print("STEP 5")
+		self.status_code = 200
+		self.status_type = "OK"
+		self.method = msg[0]
+
+
+		path = msg[1]
+		
 		if path == "/":
-			path = "/index.html"
-		print(f"PATH : {path}")
-		abs_path = BASE_DIR + path
-		print(f"ABS_PATH : {abs_path}")
-		if os.path.exists(abs_path) and self.status_code == 200:
-			print("PATH EXISTS")
-			ext = os.path.splitext(path)[1]
-			print(f"EXT = {ext}")
-			if ext in ['.jpg', '.jpeg', '.png', '.ico']:
+			path = BASE_DIR + "/index.html"
+		
+		elif path == "/favicon.ico":
+			path = BASE_DIR + "/Images/favicon.ico"
+		
+		else:
+			path = BASE_DIR + path
+		
+		print("path: ", path)
+		if os.path.exists(path):
+			self.content_type = mimetypes.guess_type(path)[0]
+			self.path = path
+			self.status_code = 200
+			self.status_type = "OK"
+
+		else:
+			self.status_code = 404
+			self.status_type = "Not Found"
+
+	
+	def setfile(self, msg):
+		if self.status_code == 501:
+			path = BASE_DIR + "/notimplemented.html"
+
+		elif self.status_code == 400:
+			path = BASE_DIR + "/badrequest.html"
+
+		else:
+			msg = msg.split(" ")
+			path = msg[1]
+
+			if path == "/":
+				path = "/index.html"
+
+			elif path == "/favicon.ico":
+				path = "/Images/favicon.ico"
+			
+			path = BASE_DIR + path
+			
+			if os.path.exists(path): # and self.status_code == 200:
+				ext = os.path.splitext(path)[1]
+				# print(f"Extension is : {ext}")
 				if ext == '.png':
 					self.content_type = "image/png"
-					pass
+
 				elif ext == '.ico':
 					self.content_type = 'image/x-icon'
-					pass
-				else:
+					
+				elif ext == '.jpeg' or ext == '.jpg':
 					self.content_type = "image/jpeg"
-					pass
-				self.filemode = 'rb'
-			
+
+			else:
+				self.status_type = "Not Found"
+				self.status_code = 404
+				path = BASE_DIR + "/notfound.html"
+
+		self.path = path
+
+	def setheaders(self, request_headers):
+		for head in request_headers:
+			head = head.split(": ")
+			# print(head, end=" ")
+			if len(head) > 1:
+				self.headers[head[0].lower()] = head[1].lower()
+
+		try :
+			self.connection = self.headers["connection"]
+
+		except KeyError:
+			pass
+		print("")
+		# with open(path, self.filemode) as f:
+		# 	self.content = f.read()
+		# 	self.content_length = len(self.content)
+	def readfile(self, only_length=False, is_error=False):
+		if is_error:
+			self.content_type = 'text/html'
+			self.content = ERROR_RESPONSE %{'code' : self.status_code, 'explain' : self.status_type}
+			self.content_length = len(self.content)
+			return
+		self.content_length = os.path.getsize(self.path)
+		if only_length:
+			return
+		with open(self.path, 'rb') as f:
+			self.content = f.read()
+
+	def response_line(self):
+		return f"{self.scheme} {self.status_code} {self.status_type}"
+
+	def GET_method(self):
+		print("GET METHOD CALLED")
+		self.readfile()
+		# response_headers = f"{d.getstatus()}\r\n{d.acceptranges()}\r\n{d.getconnection()}\r\nDate: {d.gettime()}\r\nServer: {SERVER_NAME}\r\nContent-Length: {d.getcontentlength()}\r\nContent-Type: {d.getcontenttype()}\r\n\r\n"
+		response_headers = f"{self.response_line()}{CRLF}Connection: {self.connection}{CRLF}Accept-Ranges: bytes{CRLF}Date: {self.gmtime}Server: {SERVER_NAME}{CRLF}Content-Length: {self.content_length}{CRLF}Content-Type: {self.content_type}{CRLF}{CRLF}"
+		response_body = self.content
+
+		return [response_headers.encode(), response_body]
+
+	def POST_method(self):
+		print("POST METHOD CALLED")
+		if self.parameters:
+			params = urllib.parse.parse_qs(self.parameters)
 		else:
-			print(f"PATH DOES NOT EXIST and {self.status_code}")
-			self.status_type = "Not Found"
-			self.status_code = 404
+			# Use proper error here
+			self.status_code = 400
+			self.status_type = "Bad Request"
+			return
+		logger = use_logger("POST")
+		logger.info(params)
+		self.status_code = 201 
+		self.status_type = "Created" # "No Content"
+		response_headers = f"{self.response_line()}{CRLF}Connection: {self.connection}{CRLF}Date: {self.gmtime}{CRLF}Server: {SERVER_NAME}{CRLF}Content-Type: text/html{CRLF}Content-Length: 0{CRLF}{CRLF}"
+		return [response_headers.encode()]
+
+	def HEAD_method(self):
+		print("HEAD METHOD CALLED")
+		self.readfile(only_length=True)
+		response_headers = f"{self.response_line()}{CRLF}Connection: {self.connection}{CRLF}Accept-Ranges: bytes{CRLF}Date: {self.gmtime}Server: {SERVER_NAME}{CRLF}Content-Length: {self.content_length}{CRLF}Content-Type: {self.content_type}{CRLF}{CRLF}"
+		return [response_headers.encode()]
+
+	def DELETE_method(self):
+		print("DELETE METHOD CALLED")
+		pass
+
+	def PUT_method(self):
+		print("PUT METHOD CALLED")
+		pass
+
+	def INVALID_method(self):
+		print("INVALID METHOD CALLED")
+		status_code = self.status_code
+		try:
+			errorm = getattr(self, "error_%s" %status_code)
+
+		except AttributeError:
+			errorm = self.error_501
+
+		return errorm()
+		# if status_code == 400:
+		# 	return self.400_error()
 		
-		if self.status_code == 200:
-			# self.f = open(abs_path, self.filemode)
-			path = abs_path
-		elif self.status_code == 404:
-			# self.f = open('notfound.html', self.filemode)
-			path = "notfound.html"
-		else:
-			self.f = open('badrequest.html', self.filemode)
-			path = "badrequest.html"
-		print(f"FILE MODE : {self.filemode}")
-		f = open(path, self.filemode)
-		self.f = f
-		self.content = f.read()
-		self.content_length = len(self.content)
-	
+		# elif status_code == 404:
+		# 	return self.404_error()
+
+		# else:
+		# 	return self.501_error()
+
+	def error_501(self):
+		print("error_501 METHOD CALLED")
+		self.readfile(is_error=True)
+		response_headers= f"{self.response_line()}{CRLF}Connection: {self.connection}{CRLF}Content-Type: {self.content_type}{CRLF}Content-Length: {self.content_length}{CRLF}Date: {self.gmtime}{CRLF}Server: {SERVER_NAME}{CRLF}{CRLF}"
+		response_body = self.content
+
+		return [response_headers.encode(), response_body]
+
+	def error_404(self):
+		print("error_404 METHOD CALLED")
+		self.readfile(is_error=True)
+		response_headers = f"{self.response_line()}{CRLF}Connection: {self.connection}{CRLF}Content-Type: {self.content_type}{CRLF}Content-Length: {self.content_length}{CRLF}Date: {self.gmtime}{CRLF}Server: {SERVER_NAME}{CRLF}{CRLF}"
+		response_body = self.content
+
+		return [response_headers.encode(), response_body]
+
+	def error_400(self):
+		print("error_400 METHOD CALLED")
+		self.readfile(is_error=True)
+		response_headers = f"{self.response_line()}{CRLF}Connection: {self.connection}{CRLF}Content-Type: {self.content_type}{CRLF}Content-Length: {self.content_length}{CRLF}Date: {self.gmtime}{CRLF}Server: {SERVER_NAME}{CRLF}{CRLF}"
+		response_body = self.content
+
+		return [response_headers.encode(), response_body]
+
+	def response(self):
+		try:
+			request_method = getattr(self, '%s_method' % self.method)
+
+		except AttributeError:
+			request_method = self.INVALID_method
+
+		return request_method()
+
 	def getmethod(self):
 		return self.method
 	
@@ -125,93 +337,56 @@ class Decipher():
 		return f"Connection: {self.connection}"
 	
 	def getencoding(self):
-		if self.filemode == 'r':
-			return "Content-Encoding: gzip\r\n"
-		return ''
-		
-	def getfiledescriptor(self):
-		return self.f
+		pass
 	
 	def getetag(self):
-		return "2000-5b159bc1b3eda"
+		pass
 	
 	def getvary(self):
-		if self.filemode == 'r':
-			return "Vary: Accept-Encoding\r\n"
-		return ''
-		
-def gettime():
-	return time.strftime("%a, %d %b %Y %X GMT\n", time.gmtime())
+		pass
 
-def getlength(text):
-	return len(text)
-
-def pathexists(path):
-	path = os.path.join(path, BASE_DIR)
-	if os.path.exists(path):
-		return True
-	return False
 
 def Listen(client, address):
 	while True:
 		try:
 			message = client.recv(4096).decode()
-			print("MESSAGE: \n", message)
 			
-			'''
-			message = message.split()
-			if not message:
-				raise socket.timeout
-			print(message)
-			method = message[0].upper()
-			if method == "GET":
-				if len(message) == 1 or message[1] == "/" or message[1] == "/index.html" :
-					page = "index.html"
-				else:
-					page = message[1]
-				if pathexists(page):
-					print(f"PATH TO {page} EXISTS")
-					f = open(page, 'r')
-					text = f.read()
-					response = f"HTTP/1.1 200 OK\n{gettime()}Server: {SERVER_NAME}\nContent-Length: {len(text)}\nConnection: keep-alive\nContent-Type: text/html\n\n{text}"
-					client.send(response.encode())
-				else:
-					print(f"PATH TO {page} DOES NOT EXIST")
-					response = "HTTP/1.1 404 Page Not Found\n"
-					client.send(response.encode())
-			else:
-				response = "HTTP/1.1 400 Bad Request"
-				'''
+			d = RequestHandler(message)
+			response = d.response()
+			try :
+				for r in response:
+					print(response)
+					client.send(r)
+				print("Response sent successfully.")
+			except Exception as e:
+				print("Exeption : ", e)
+				# client.close()
+				print("Internal Server Error")
+				# Yet to be implemented
+				print("Connection closed by foreign host.")
+				# client.send("Connection closed by foreign host.".encode())
+				client.close()
+				return
+
+			if d.getconnection().lower() == "close":
+				print("Connection closed by foreign host.")
+				client.send("Connection closed by foreign host.".encode())
+				client.close()
 				
-			d = Decipher(message)
-			response = f"{d.getstatus()}\r\n{d.acceptranges()}\r\n{d.getconnection()}\r\nDate: {d.gettime()}\r\nServer: {SERVER_NAME}\r\nContent-Length: {d.getcontentlength()}\r\nContent-Type: {d.getcontenttype()}\r\n\r\n"
-			responses = [f"{d.getstatus()}\r\n", f"{d.acceptranges()}\r\n", f"{d.getconnection()}\r\n", f"Date: {d.gettime()}\r\n", f"Server: {SERVER_NAME}\r\n", f"Content-Length: {d.getcontentlength()}\r\n", f"Content-Type: {d.getcontenttype()}\r\n", f"\r\n{d.getcontent()}\r\n" ]
-			# for response in responses:
-			#	client.send(response.encode())
-			message_body = d.getcontent()
-			"""
-			k = int(len(response) / 4096)
-			p = 0
-			for i in range(0, k-1):
-				client.send(response[p:p+4096].encode())
-				p += 4096
-			"""
-			print("Response : ")
-			print(response)
-			client.send(response.encode())
+				return
+
+			# d = Decipher(message)
 			
-			if d.filemode == 'rb':
-				print(message_body)
-				client.send(message_body)
-			else:
-				client.send(message_body.encode())
+			# response_headers = f"{d.getstatus()}\r\n{d.acceptranges()}\r\n{d.getconnection()}\r\nDate: {d.gettime()}\r\nServer: {SERVER_NAME}\r\nContent-Length: {d.getcontentlength()}\r\nContent-Type: {d.getcontenttype()}\r\n\r\n"
 			
-			# client.sendall(response.encode())
-			# client.sendfile(f)
+			# response_body = d.getcontent()
 			
-			# client.sendall("\r\n".encode())
-            #close the connection
-			# client.close()
+			# # encode because response is string
+			# client.send(response_headers.encode())
+			
+			# # don't encode because message body is bytes (always read as binary)
+			# client.send(response_body)
+			
 		except socket.timeout:
 			print(f"{address[0]}:{address[1]} disconnected")
 			return		

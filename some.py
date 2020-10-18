@@ -1,28 +1,30 @@
-import random
-message = "ET /cat.jpeg HTTP/1.1\nHost: 127.0.0.1:14000User-Agent: Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:80.0) Gecko/20100101 Firefox/80.0Accept: text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,*/*;q=0.8\nAccept-Language: en-US,en;q=0.5\nAccept-Encoding: gzip, deflate\nConnection: keep-alive\nUpgrade-Insecure-Requests: 1\n"
-message = message.split('\n')
-s = dict()
-for i in message:
-	j = i.split(": ")
-	if len(j) > 1:
-		s[j[0]] = j[1]
+import mimetypes
+import os
+import urllib
 
-print(s)
+x = "/home/atharva/Study/Sem_5/CN/HTTP-Server/Images/cat.jpeg"
 
 
-f = open('cat.jpeg', 'rb')
-something = f.read()
-print((something))
+DEFAULT_ERROR_MESSAGE = """
+Hello  %(name)s. %(message)s.
+Thanks.
+"""
+print(type(DEFAULT_ERROR_MESSAGE))
+print(DEFAULT_ERROR_MESSAGE %{'name':"Atharva", 'message':"Hi"})
+
+qs = "name=John+Doe&n=42&Submit=Submit"
+d = urllib.parse.parse_qs(qs)
+print(d)
+
+x = {'name': ['John Doe'], 'n': ['42'], 'Submit': ['Submit']}
+print(str(x))
 
 
-
-f = open('cat.jpeg', 'rb')
-print(len(f.read()))
-
-f.close()
-
-f = open('x.txt', 'w')
-for i in range(0, 81920):
-	f.write(f"Line : {i}\n")
-
-f.close()	
+y = input()
+if y == '':
+	print("Can be used 1")
+if y == '\r\n':
+	print("Can be used 2")
+	
+else:
+	print("Can't use 2")

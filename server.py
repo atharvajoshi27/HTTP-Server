@@ -9,11 +9,20 @@ import logging
 import mimetypes
 import urllib
 
-def use_logger(method):
-	if method == "POST":
-		LOG_FORMAT = LOG_FORMAT = "%(levelname)s %(asctime)s : %(message)s"
-		logging.basicConfig(filename='POST_DATA.log', level=logging.DEBUG, format=LOG_FORMAT)
-		return logging.getLogger()
+
+def use_logger(goal):
+	filename = "access.log"
+
+	if goal == "POST":
+		filename = "post.log"
+	
+	if goal == "access":
+		filename = "access.log"
+
+	LOG_FORMAT = "%(levelname)s %(asctime)s : %(message)s"
+	logging.basicConfig(filename=filename, level=logging.DEBUG, format=LOG_FORMAT)
+	return logging.getLogger()
+
 
 ERROR_RESPONSE = """
 				<!DOCTYPE html>
@@ -38,7 +47,7 @@ CRLF = "\r\n"
 
 class RequestHandler():
 	method = "INVALID"
-	path = "/notimplemented.html"
+	# path = "/notimplemented.html"
 	connection = "Keep-Alive"
 	server = SERVER_NAME
 	root = BASE_DIR
@@ -53,6 +62,7 @@ class RequestHandler():
 	accept_ranges = "bytes"
 	allowed_methods = ["GET", "POST", "HEAD", "PUT", "DELETE",]
 	not_implemented_methods = ["CONNECT", "OPTIONS", "TRACE", "PATCH", ]
+	non_editable = []
 	# types = {
 	# 	"get" : "GET",
 	# 	"head" : "HEAD", 
@@ -63,7 +73,7 @@ class RequestHandler():
 	
 	headers = {}
 	
-	def __init__(self, message=None):
+	def __init__(self, client, message=None):
 		# print("MESSAGE: ")
 		# print(message)
 		self.setsetters(message)
@@ -138,13 +148,15 @@ class RequestHandler():
 			path = BASE_DIR + path
 		
 		print("path: ", path)
-		if os.path.exists(path):
+		if os.path.exists(path) or self.method == "PUT":
+			print("STEP 6")
 			self.content_type = mimetypes.guess_type(path)[0]
 			self.path = path
 			self.status_code = 200
 			self.status_type = "OK"
 
 		else:
+			print("STEP 7")
 			self.status_code = 404
 			self.status_type = "Not Found"
 
@@ -189,10 +201,10 @@ class RequestHandler():
 
 	def setheaders(self, request_headers):
 		for head in request_headers:
-			head = head.split(": ")
+			head = head.split(":")
 			# print(head, end=" ")
 			if len(head) > 1:
-				self.headers[head[0].lower()] = head[1].lower()
+				self.headers[head[0].lower().strip()] = head[1].lower().strip()
 
 		try :
 			self.connection = self.headers["connection"]
@@ -204,14 +216,22 @@ class RequestHandler():
 		# 	self.content = f.read()
 		# 	self.content_length = len(self.content)
 	def readfile(self, only_length=False, is_error=False):
+		
+		# If there is error then we want to format the default message and send accordingly
 		if is_error:
 			self.content_type = 'text/html'
 			self.content = ERROR_RESPONSE %{'code' : self.status_code, 'explain' : self.status_type}
 			self.content_length = len(self.content)
+			
 			return
+
 		self.content_length = os.path.getsize(self.path)
+		
+		# For HEAD request we don't need body
 		if only_length:
 			return
+
+		# Else read everything in binary and store for further use
 		with open(self.path, 'rb') as f:
 			self.content = f.read()
 
@@ -235,7 +255,7 @@ class RequestHandler():
 			# Use proper error here
 			self.status_code = 400
 			self.status_type = "Bad Request"
-			return
+			return self.error_400()
 		logger = use_logger("POST")
 		logger.info(params)
 		self.status_code = 201 
@@ -255,10 +275,55 @@ class RequestHandler():
 
 	def PUT_method(self):
 		print("PUT METHOD CALLED")
-		pass
+
+		b = os.path.exists(self.path) # Check if resource already exists
+		
+		# An origin server that allows PUT on a given target resource MUST send
+		#  a 400 (Bad Request) response to a PUT request that contains a
+		#  Content-Range header field (Section 4.2 of [RFC7233])
+		print(self.headers)
+		try :
+			self.headers["content-range"]
+			self.status_code = 400
+			self.status_type = "Bad Request"
+			print("Here We Go Again")
+			return self.error_handler()
+
+		except KeyError:
+			print("Key Error")
+			pass
+
+		if self.path in self.non_editable:
+			# Since file is used by server this file can't be edited and this method
+			# is not implemented for this particular file
+			self.status_code = 405
+			self.status_type = "Method Not Allowed"
+			return self.error_405()
+		
+		try:
+			with open(self.path, 'w') as f:
+				f.write(self.parameters)
+			
+			if b: # Resource already exists
+				self.status_code = 200
+				self.status_type = "OK"
+			
+			else: # Resource created
+				self.status_code = 201
+				self.status_type = "Created"
+
+		except Exception as e:
+			print(f"Exception {e} has occured in PUT")
+			self.status_code = 500
+			self.status_type = "Internal Server Error"
+			return self.error_500()
+
+		response_headers = f"{self.response_line()}{CRLF}Connection: {self.connection}{CRLF}Content-Type: {self.content_type}{CRLF}Content-Length: {self.content_length}{CRLF}Date: {self.gmtime}{CRLF}Server: {SERVER_NAME}{CRLF}{CRLF}"
+		return [response_headers.encode()]
 
 	def INVALID_method(self):
 		print("INVALID METHOD CALLED")
+		return self.error_handler()
 		status_code = self.status_code
 		try:
 			errorm = getattr(self, "error_%s" %status_code)
@@ -275,6 +340,32 @@ class RequestHandler():
 
 		# else:
 		# 	return self.501_error()
+
+	def error_handler(self):
+		print(f"error_handler METHOD CALLED FOR {self.status_code} - {self.status_type}")
+		self.readfile(is_error=True)
+		response_headers= f"{self.response_line()}{CRLF}Connection: {self.connection}{CRLF}Content-Type: {self.content_type}{CRLF}Content-Length: {self.content_length}{CRLF}Date: {self.gmtime}{CRLF}Server: {SERVER_NAME}{CRLF}{CRLF}"
+		response_body = self.content
+
+		return [response_headers.encode(), response_body.encode()]
+
+	def INTERNAL_SERVAR_ERROR(self):
+		self.status_code = 500
+		self.status_type = "Internal Server Error"
+		return self.error_handler()
+
+	def RAISE_ERROR(self, status_code=500, status_type="Internal Server Error"):
+		self.status_code = status_code
+		self.status_type = status_type
+		return self.error_handler()
+
+	def error_500(self):
+		print("error_500 METHOD CALLED")
+		self.readfile(is_error=True)
+		response_headers= f"{self.response_line()}{CRLF}Connection: {self.connection}{CRLF}Content-Type: {self.content_type}{CRLF}Content-Length: {self.content_length}{CRLF}Date: {self.gmtime}{CRLF}Server: {SERVER_NAME}{CRLF}{CRLF}"
+		response_body = self.content
+
+		return [response_headers.encode(), response_body]
 
 	def error_501(self):
 		print("error_501 METHOD CALLED")
@@ -301,11 +392,15 @@ class RequestHandler():
 		return [response_headers.encode(), response_body]
 
 	def response(self):
-		try:
-			request_method = getattr(self, '%s_method' % self.method)
-
-		except AttributeError:
+		if self.status_code != 200:
 			request_method = self.INVALID_method
+
+		else:
+			try:
+				request_method = getattr(self, '%s_method' % self.method)
+
+			except AttributeError:
+				request_method = self.INVALID_method
 
 		return request_method()
 
@@ -351,9 +446,11 @@ def Listen(client, address):
 		try:
 			message = client.recv(4096).decode()
 			
-			d = RequestHandler(message)
+			d = RequestHandler(client, message)
 			response = d.response()
 			try :
+
+
 				for r in response:
 					print(response)
 					client.send(r)

@@ -28,3 +28,9 @@ if y == '\r\n':
 	
 else:
 	print("Can't use 2")
+	
+	
+l = "Atharva" * ["hello", "nice to meet you!"]
+print(l)
+
+

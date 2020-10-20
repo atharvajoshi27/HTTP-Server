@@ -10,6 +10,8 @@ import mimetypes
 import urllib
 
 
+
+
 def use_logger(goal):
 	filename = "access.log"
 
@@ -25,18 +27,17 @@ def use_logger(goal):
 
 
 ERROR_RESPONSE = """
-				<!DOCTYPE html>
-				<html>
-				    <head>
-				        <meta http-equiv="Content-Type" content="text/html;charset=utf-8">
-				        <title>Error response</title>
-				    </head>
-				    <body>
-				    	<p><b>%(code)s</b>. %(explain)s.</p>
-				    	<p>ERROR_HAS_OCCURED</p>
-				    </body>
-				</html>
-				"""
+<!DOCTYPE html>
+<html>
+	<head>
+		<meta http-equiv="Content-Type" content="text/html;charset=utf-8">
+		<title>Error response</title>
+	</head>
+	<body>
+		<p><b>%(code)s</b>. %(explain)s.</p>
+		<p>ERROR_HAS_OCCURED</p>
+	</body>
+</html>"""
 # https://www.w3.org/Protocols/rfc2616/rfc2616-sec4.html#sec4.2
 
 SERVER_NAME = "Atharva's Server"
@@ -44,6 +45,18 @@ SERVER_NAME = "Atharva's Server"
 BASE_DIR = "/home/atharva/Study/Sem_5/CN/HTTP-Server"
 
 CRLF = "\r\n"
+
+STATUS = {
+	 
+	 200 : "OK",
+	 201 : "Created",
+	 400 : "Bad Request",
+	 404 : "Not Found",
+	 405 : "Method Not Allowed",
+	 500 : "Internal Server Error",
+	 501 : "Not Implemented",
+
+}
 
 class RequestHandler():
 	method = "INVALID"
@@ -62,7 +75,8 @@ class RequestHandler():
 	accept_ranges = "bytes"
 	allowed_methods = ["GET", "POST", "HEAD", "PUT", "DELETE",]
 	not_implemented_methods = ["CONNECT", "OPTIONS", "TRACE", "PATCH", ]
-	non_editable = []
+	non_editable = ['/home/atharva/Study/Sem_5/CN/HTTP-Server/client.py', '/home/atharva/Study/Sem_5/CN/HTTP-Server/form.html', '/home/atharva/Study/Sem_5/CN/HTTP-Server/Images', '/home/atharva/Study/Sem_5/CN/HTTP-Server/index.html', '/home/atharva/Study/Sem_5/CN/HTTP-Server/post.log', '/home/atharva/Study/Sem_5/CN/HTTP-Server/RFC', '/home/atharva/Study/Sem_5/CN/HTTP-Server/server.py', '/home/atharva/Study/Sem_5/CN/HTTP-Server/tcpserver.py', '/home/atharva/Study/Sem_5/CN/HTTP-Server/test.py']
+
 	# types = {
 	# 	"get" : "GET",
 	# 	"head" : "HEAD", 
@@ -216,32 +230,51 @@ class RequestHandler():
 		# 	self.content = f.read()
 		# 	self.content_length = len(self.content)
 	def readfile(self, only_length=False, is_error=False):
-		
+		# Returns true if successful
+
 		# If there is error then we want to format the default message and send accordingly
 		if is_error:
 			self.content_type = 'text/html'
 			self.content = ERROR_RESPONSE %{'code' : self.status_code, 'explain' : self.status_type}
-			self.content_length = len(self.content)
-			
-			return
+			self.content_length = len(self.content)		
+			return True
 
-		self.content_length = os.path.getsize(self.path)
+		# self.content_length = os.path.getsize(self.path)
 		
 		# For HEAD request we don't need body
-		if only_length:
-			return
+		# if only_length:
+		# 	return True
 
 		# Else read everything in binary and store for further use
-		with open(self.path, 'rb') as f:
-			self.content = f.read()
+		try :
+			with open(self.path, 'rb') as f:
+				self.content_length = os.path.getsize(self.path)
+				# For HEAD request we don't need body
+				if only_length:
+					return True
+				self.content = f.read()
+		except Exception as e:
+			print(e)
+			self.status_code = 405
+			self.status_type = "Not Implemented"
+			return False
+		return True
 
 	def response_line(self):
 		return f"{self.scheme} {self.status_code} {self.status_type}"
 
+	def setstatuscodeandtype(status_code):
+		self.status_code = status_code
+		self.status_type = STATUS[status_code]
+
 	def GET_method(self):
 		print("GET METHOD CALLED")
-		self.readfile()
+		success = self.readfile()
+		if not success:
+			print("Request was unsuccessful")
+			return self.error_handler()
 		# response_headers = f"{d.getstatus()}\r\n{d.acceptranges()}\r\n{d.getconnection()}\r\nDate: {d.gettime()}\r\nServer: {SERVER_NAME}\r\nContent-Length: {d.getcontentlength()}\r\nContent-Type: {d.getcontenttype()}\r\n\r\n"
+		
 		response_headers = f"{self.response_line()}{CRLF}Connection: {self.connection}{CRLF}Accept-Ranges: bytes{CRLF}Date: {self.gmtime}Server: {SERVER_NAME}{CRLF}Content-Length: {self.content_length}{CRLF}Content-Type: {self.content_type}{CRLF}{CRLF}"
 		response_body = self.content
 
@@ -249,13 +282,26 @@ class RequestHandler():
 
 	def POST_method(self):
 		print("POST METHOD CALLED")
+		params = ''
 		if self.parameters:
-			params = urllib.parse.parse_qs(self.parameters)
+			try :
+				if self.headers["content-type"] == "application/x-www-form-urlencoded":
+					params = urllib.parse.parse_qs(self.parameters)
+				else: # multipart-form data
+					pass
+			except KeyError:
+				params = urllib.parse.parse_qs(self.parameters)
 		else:
 			# Use proper error here
 			self.status_code = 400
 			self.status_type = "Bad Request"
 			return self.error_400()
+
+		if len(self.parameters) > 0 and len(params) == 0: # If user gave random string e.g. "fa3489208098afs"
+			self.status_code = 400
+			self.status_type = "Bad Request"
+			return self.error_handler()
+
 		logger = use_logger("POST")
 		logger.info(params)
 		self.status_code = 201 
@@ -265,12 +311,43 @@ class RequestHandler():
 
 	def HEAD_method(self):
 		print("HEAD METHOD CALLED")
-		self.readfile(only_length=True)
+		success = self.readfile(only_length=True)
+		if not success:
+			return self.error_handler()
 		response_headers = f"{self.response_line()}{CRLF}Connection: {self.connection}{CRLF}Accept-Ranges: bytes{CRLF}Date: {self.gmtime}Server: {SERVER_NAME}{CRLF}Content-Length: {self.content_length}{CRLF}Content-Type: {self.content_type}{CRLF}{CRLF}"
 		return [response_headers.encode()]
 
 	def DELETE_method(self):
 		print("DELETE METHOD CALLED")
+		b = os.path.exists(self.path)
+		if b:
+			# Not all files can be deleted
+			if self.path in self.non_editable:
+				self.status_code = 405
+				self.status_type = "Method Not Allowed"
+				return self.error_handler()
+			
+
+			try :
+				os.remove(self.path)
+				self.status_type = 200
+				self.status_code = "OK"
+				self.readfile(is_error=True)
+				response_headers = f"{self.response_line()}{CRLF}Connection: {self.connection}{CRLF}Content-Type: {self.content_type}{CRLF}Content-Length: {self.content_length}{CRLF}Date: {self.gmtime}{CRLF}Server: {SERVER_NAME}{CRLF}{CRLF}"
+				response_body = self.content
+				return [response_headers.encode(), response_body.encode()]
+
+			except IsADirectory:
+				print("Directory Cannot be removed")
+				self.status_code = 405
+				self.status_type = "Method Not Allowed"
+				return self.error_handler()
+
+		# If file doesn't exist
+		else:
+			self.status_code = 405
+			self.status_type = "Method Not Allowed"
+			return self.error_handler()
 		pass
 
 	def PUT_method(self):
@@ -429,7 +506,7 @@ class RequestHandler():
 		return "Accept-Ranges: bytes"
 	
 	def getconnection(self):
-		return f"Connection: {self.connection}"
+		return self.connection
 	
 	def getencoding(self):
 		pass
@@ -441,20 +518,38 @@ class RequestHandler():
 		pass
 
 
+
+def recvall(client):
+	BUFF_SIZE = 10240
+	data = b''
+	while True:
+		part = client.recv(BUFF_SIZE)
+		data += part
+		if len(part) < BUFF_SIZE:
+			break
+	return data
+
+
+
 def Listen(client, address):
 	while True:
 		try:
-			message = client.recv(4096).decode()
+			message = recvall(client).decode()
+			print("This works")
 			
 			d = RequestHandler(client, message)
 			response = d.response()
 			try :
 
-
 				for r in response:
 					print(response)
 					client.send(r)
 				print("Response sent successfully.")
+				print(d.getconnection())
+				if d.getconnection() == "close":
+					client.send("Connection closed by foreign host.".encode())
+					client.close()
+					return
 			except Exception as e:
 				print("Exeption : ", e)
 				# client.close()

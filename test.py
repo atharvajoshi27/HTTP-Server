@@ -28,9 +28,21 @@ if y == '\r\n':
 	
 else:
 	print("Can't use 2")
-	
-	
-l = "Atharva" * ["hello", "nice to meet you!"]
-print(l)
 
 
+BASE_DIR = "/home/atharva/Study/Sem_5/CN/HTTP-Server/"
+
+s = ["client.py",  "form.html",  "Images",  "index.html",  "post.log",  "RFC",  "server.py",  "tcpserver.py",  "test.py"]
+l = []
+for i in s:
+	l.append(BASE_DIR + i)
+
+try :
+	with open('RFC', 'r') as f:
+		print(f.read())
+except IsADirectoryError:
+	print("Done")
+
+d = {}
+d[1] = 2
+print(d)

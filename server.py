@@ -8,8 +8,7 @@ import gzip
 import logging
 import mimetypes
 import urllib
-
-
+from requests_toolbelt.multipart import decoder
 
 
 def use_logger(goal):
@@ -46,17 +45,78 @@ BASE_DIR = "/home/atharva/Study/Sem_5/CN/HTTP-Server"
 
 CRLF = "\r\n"
 
+
 STATUS = {
-	 
+	 100 : "Continue",
+	 101 : "Switching Protocol",
+	 102 : "Processing",
+	 103 : "Early Hints",
 	 200 : "OK",
 	 201 : "Created",
+	 202 : "Accepted",
+	 203 : "Non-Authoritative Information",
+	 204 : "No Content",
+	 205 : "Reset Content",
+	 206 : "Partial Content",
+	 207 : "Multi-Status",
+	 208 : "Already Reported",
+	 226 : "IM Used",
+	 300 : "Multiple Choice",
+	 301 : "Moved Permanently",
+	 302 : "Found",
+	 303 : "See Other",
+	 304 : "Not Modified",
+	 305 : "Use Proxy",
+	 306 : "Unused",
+	 307 : "Temporary Redirect",
+	 308 : "Permanent Redirect",
 	 400 : "Bad Request",
 	 404 : "Not Found",
 	 405 : "Method Not Allowed",
+	 406 : "Not Acceptable",
+	 407 : "Proxy Authentication Required",
+	 408 : "Request Timeout",
+	 409 : "Conflict",
+	 410 : "Gone",
+	 411 : "Length Required",
+	 412 : "Precondition Failed",
+	 413 : "Payload Too Large",
+	 414 : "URI Too Long",
+	 415 : "Unsupported Media Type",
+	 416 : "Range Not Satisfiable",
+	 417 : "Expectation Failed",
+	 418 : "I'm a teapot",
+	 421 : "Misdirected Request",
+	 422 : "Unprocessable Emtity",
+	 423 : "Locked",
+	 424 : "Failed Dependency",
+	 425 : "Too Early",
+	 426 : "Upgrade Required",
+	 428 : "Precondition Required",
+	 429 : "Too Many Requests",
+	 431 : "Request Header Fields Too Large",
+	 451 : "Unavailable For Legal Reasons",
 	 500 : "Internal Server Error",
 	 501 : "Not Implemented",
-
+	 502 : "Bad Gateway",
+	 503 : "Service Unavailable",
+	 504 : "Gateway Timeout",
+	 505 : "HTTP Version Not Supported",
+	 506 : "Variant Also Negotiates",
+	 507 : "Insufficient Storage",
+	 508 : "Loop Detected",
+	 510 : "Not Extended",
+	 511 : "Network Authentication Required",
 }
+
+
+class T():
+	content = None
+	headers = dict()
+	def __init__(self, content, headers, encoding='utf-8'):
+		self.content = content.encode(encoding)
+		for key, value in headers.items():
+			self.headers[key.encode(encoding)] = value.encode(encoding)
 
 class RequestHandler():
 	method = "INVALID"
@@ -87,9 +147,10 @@ class RequestHandler():
 	
 	headers = {}
 	
-	def __init__(self, client, message=None):
-		# print("MESSAGE: ")
-		# print(message)
+	def __init__(self, message, client=None):
+		print("MESSAGE: ")
+		print(message)
+		self.message = message
 		self.setsetters(message)
 		# message = message.split("\r\n")
 		# method_info = message[0].split(" ")
@@ -102,12 +163,16 @@ class RequestHandler():
 		# self.callmethod()
 	def setsetters(self, message):
 		message = message.split("\r\n\r\n")
+		
+		print('RARARARARARARARAR : \n', message)
 		if len(message) > 1:
 			self.parameters = message[1]
 		else:
 			self.parameters = ''
 
 		msg = message[0].split("\r\n")
+
+
 
 		self.setmethod(msg[0])
 	
@@ -288,7 +353,20 @@ class RequestHandler():
 				if self.headers["content-type"] == "application/x-www-form-urlencoded":
 					params = urllib.parse.parse_qs(self.parameters)
 				else: # multipart-form data
-					pass
+					print("\nMULTIPART FORM DATA :\n")
+					from requests_toolbelt.multipart import decoder
+					t = T(content=self.parameters, headers=self.headers)
+					multipart_data = decoder.MultipartDecoder.from_response(t)
+					print(multipart_data)
+					# for part in multipart_data.parts:
+					#     print(part.text)  # Alternatively, part.text if you want unicode
+					#     print(part.headers)
+
+					# multipart_string = self.parameters.encode()
+					# content_type = "multipart/form-data"
+					# for part in decoder.MultipartDecoder(multipart_string, content_type).parts:
+					#   print(part.text)
+
 			except KeyError:
 				params = urllib.parse.parse_qs(self.parameters)
 		else:
@@ -537,13 +615,13 @@ def Listen(client, address):
 			message = recvall(client).decode()
 			print("This works")
 			
-			d = RequestHandler(client, message)
+			d = RequestHandler(client=client, message=message)
 			response = d.response()
 			try :
-
-				for r in response:
-					print(response)
-					client.send(r)
+				client.send(response[0] + response[1])
+				# for r in response:
+				# 	print(response)
+				# 	client.send(r)
 				print("Response sent successfully.")
 				print(d.getconnection())
 				if d.getconnection() == "close":

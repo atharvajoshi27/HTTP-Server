@@ -45,4 +45,9 @@ except IsADirectoryError:
 
 d = {}
 d[1] = 2
+for key, value in d.items():
+	print(key, " :", value)
+	key = str(key).encode()
+	value = str(value).encode()
+
 print(d)

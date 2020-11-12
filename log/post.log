@@ -1,0 +1,18 @@
+INFO 2020-10-19 05:47:41,601 : {'name': ['Write'], 'n': ['23'], 'Submit': ['Submit Query']}
+INFO 2020-10-19 05:48:24,960 : {'name': ['Write'], 'n': ['23'], 'Submit': ['Submit Query']}
+INFO 2020-10-19 05:48:37,536 : {'name': ['WriteRead'], 'n': ['23'], 'Submit': ['Submit Query']}
+INFO 2020-10-19 06:29:12,669 : {'name': ['Okay'], 'n': ['42'], 'Submit': ['Submit Query']}
+INFO 2020-10-19 11:03:09,818 : {'name': ['Good Morning'], 'n': ['42'], 'Submit': ['Submit Query']}
+INFO 2020-10-20 16:52:49,590 : {'name': ['form.html'], 'n': ['42'], 'Submit': ['Submit Query']}
+INFO 2020-11-02 14:26:27,526 : {'name': ['hello'], 'n': ['1'], 'Submit': ['Submit']}
+INFO 2020-11-02 14:26:27,527 : {'name': ['hello'], 'n': ['1'], 'Submit': ['Submit']}
+INFO 2020-11-02 14:26:27,528 : {'name': ['hello'], 'n': ['1'], 'Submit': ['Submit']}
+INFO 2020-11-02 14:27:35,358 : {'name': ['hello'], 'n': ['1'], 'Submit': ['Submit']}
+INFO 2020-11-02 14:27:35,359 : {'name': ['hello'], 'n': ['1'], 'Submit': ['Submit']}
+INFO 2020-11-02 14:27:35,360 : {'name': ['hello'], 'n': ['1'], 'Submit': ['Submit']}
+INFO 2020-11-02 14:27:40,705 : {'name': ['hello'], 'n': ['1'], 'Submit': ['Submit']}
+INFO 2020-11-02 14:27:40,706 : {'name': ['hello'], 'n': ['1'], 'Submit': ['Submit']}
+INFO 2020-11-02 14:27:40,708 : {'name': ['hello'], 'n': ['1'], 'Submit': ['Submit']}
+INFO 2020-11-04 05:58:15,271 : {'name': ['hello'], 'n': ['874'], 'Submit': ['Submit']}
+INFO 2020-11-04 05:58:15,272 : {'name': ['hello'], 'n': ['874'], 'Submit': ['Submit']}
+INFO 2020-11-04 05:58:15,274 : {'name': ['hello'], 'n': ['874'], 'Submit': ['Submit']}

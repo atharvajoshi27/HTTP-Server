@@ -3,7 +3,7 @@ import mimetypes
 import os
 import time
 import urllib
-
+import pathlib
 
 x = "/home/atharva/Study/Sem_5/CN/HTTP-Server/Images/cat.jpeg"
 
@@ -73,10 +73,25 @@ modificationTime = datetime.datetime.utcfromtimestamp(mod_time).strftime('%a, %d
 print(modificationTime.strip().replace(' ', '').lower())
 
 
-strring = "atharva"
-for i in range(0, len(strring)):
-	if strring[i] == 'a':
-		strring[i] = 'b'
 
-print(strring)
+
+
+
+print("Main Here")
+p4 = "/home/atharva/Study/Sem_5/CN/HTTP-Server/putted/cjkvfy.txt"
+path = pathlib.Path(p4)
+path.parent.mkdir(parents=True, exist_ok=True)
+# p = Path("deleted/random/something/first.txt")
+# p.mkdir(exist_ok=True)
+with open("/home/atharva/Study/Sem_5/CN/HTTP-Server/putted/cjkvfy.txt", 'w') as f:
+	f.write("Writing Somethioaidufladflng")
+
+xyz = [1, 2, 3, 4]
+import random
+random.shuffle(xyz)
+p = 0
+while p < 20 :
+	p += 1
+	print(random.randint(0, len(xyz)))
+print(xyz)
 # last_modified = time.strftime("%a, %d %b %Y %X GMT", os.path.getmtime(filename))

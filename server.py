@@ -3,18 +3,6 @@ import sys
 import os
 import threading
 from request_handler import RequestHandler, use_logger
-# import datetime
-# import time
-# import gzip
-# import logging
-# import mimetypes
-# import urllib
-# from requests_toolbelt.multipart import decoder
-# import hashlib
-# import random
-# import string
-
-
 
 def recvall(client):
 	BUFF_SIZE = 4096
@@ -27,52 +15,55 @@ def recvall(client):
 	return data
 
 
-
 def Listen(client, address):
 	while True:
 		try:
 
 			message = recvall(client)
-			print("Raw request: ", message)
+			# print("Raw request: ", message)
 			message = message.decode()
-			print("This works")
+			# print("This works")
 			
 			d = RequestHandler(client=client, message=message)
 			response = d.response()
 			try :
 				# client.send(response[0] + response[1])
-				print(f"Response Received: {response}")
+				print("Response Received:")
+				net = b''
 				for r in response:
-					print(response)
-					client.send(r)
-				print("Response sent successfully.")
-				print(d.getconnection())
+					net += r
+				client.sendall(net)
+				print(net.decode())
+					# print(response)
+					# client.send(r)
+				# print("Response sent successfully.")
+				# print(d.getconnection())
 				if d.getconnection() == "close":
 					client.send("Connection closed by foreign host.".encode())
 					client.close()
 					return
 			except Exception as e:
-				print("Exception 9")
-				print("Exeption : ", e)
+				# print("Exception 9")
+				# print("Exeption : ", e)
 				client.close()
-				print("Internal Server Error")
+				# print("Internal Server Error")
 				logger = use_logger(error=1)
 				logger.error(f'[{e}] -- closing connection')
 				# Yet to be Implemented
-				print("Connection closed by foreign host.")
+				# print("Connection closed by foreign host.")
 				# client.send("Connection closed by foreign host.".encode())
 				# client.close()
 				return
 
 			if d.getconnection().lower() == "close":
-				print("Connection closed by foreign host.")
+				# print("Connection closed by foreign host.")
 				client.send("Connection closed by foreign host.".encode())
 				client.close()
 				
 				return
 			
 		except socket.timeout:
-			print("Exception 10")
+			# print("Exception 10")
 			logger.error(f'[{e}] -- closing connection')
 			print(f"{address[0]}:{address[1]} disconnected")
 			return		
@@ -93,7 +84,7 @@ def main(port):
 			t.start()
 		except KeyboardInterrupt as e:
 			print("Exception 11")
-			logger = use_logger(error=1)
+			logger = use_logger(error=1, access=0, post=0)
 			logger.error(f'[{e}] -- shutting down')
 			break
 		# t.join()

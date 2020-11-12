@@ -8,15 +8,16 @@ import gzip
 import logging
 import mimetypes
 import urllib
+import pathlib
 from requests_toolbelt.multipart import decoder
 import hashlib
 import random
 import string
+import base64
 
 from conf import *
 
 def use_logger(access=1, post=0, error=0):
-	print(f"error = {error}")
 	if post == 1:
 		filename = f"{BASE_DIR}/log/post.log"
 		LOG_FORMAT = "%(levelname)s %(asctime)s : %(message)s"
@@ -25,11 +26,9 @@ def use_logger(access=1, post=0, error=0):
 	elif error == 1:
 		filename = f"{BASE_DIR}/log/error.log"
 		logging.basicConfig(filename=filename, level=logging.DEBUG, format='[%(asctime)s] %(message)s', datefmt='%a %b %d %H:%M:%S %Y')
-		print("Here")
 		# [Wed Nov 11 12:31:58.467192 2020]
 		# [%a %b %d %H:%M:%S %Y]
 	elif access ==  1:
-		print("Here also")
 		filename = f"{BASE_DIR}/log/access.log"
 		logging.basicConfig(filename=filename, level=logging.DEBUG, format='127.0.0.1 - - [%(asctime)s] %(message)s', datefmt='%d/%b/%Y:%H:%M:%S %z')
 		# LOG_FORMAT = ""
@@ -124,7 +123,7 @@ class RequestHandler():
 			self.setstatuscodeandtype(200)
 
 		else:
-			print("STEP 7")
+			# print("STEP 7")
 			self.setstatuscodeandtype(404)
 			
 
@@ -133,7 +132,11 @@ class RequestHandler():
 		for head in request_headers:
 			head = head.split(":")
 			if len(head) > 1:
-				self.headers[head[0].lower().strip()] = head[1].lower().strip()
+				head0 = head[0].lower().strip()
+				if head0 == "authorization":
+					self.headers[head0] = head[1]
+				else:
+					self.headers[head[0].lower().strip()] = head[1].lower().strip()
 
 		try :
 			self.connection = self.headers["connection"]
@@ -168,7 +171,7 @@ class RequestHandler():
 					return True
 				self.content = f.read()
 		except Exception as e:
-			print(f"Exception 1 : {e}")
+			# print(f"Exception 1 : {e}")
 			self.logdata(err_msg=e, err_resp='resuming operations')
 			self.setstatuscodeandtype(405)
 			return False
@@ -176,15 +179,15 @@ class RequestHandler():
 
 	def logdata(self, err_msg = None, err_resp = None):
 		if not (err_msg is None and err_resp is None):
-			logger = use_logger(error=1)
+			logger = use_logger(access=0, post=0, error=1)
 			logger.error(f'[{err_msg}] -- {err_resp}')
 			return 
 		# logging.basicConfig(format='127.0.0.1 - - %(asctime)s %(message)s', datefmt='[%d/%b/%Y:%H:%M:%S %z')
-		logger = use_logger(access=1)
+		logger = use_logger(access=1, error=0, post=0)
 		msg = f"\"{self.request_line}\" {self.status_code} {self.content_length} \"-\" \"-\""
 		logger.info(msg)
 		if self.method == "POST":
-			logger = use_logger(post=1)
+			logger = use_logger(post=1, access=0, error=0)
 			logger.info(self.parsed)
 
 
@@ -199,6 +202,7 @@ class RequestHandler():
 				for line in lines:
 					# Cookie Is Valid
 					if line == cookie:
+						print("Cookie FOUND")
 						return True
 				# Invalid Cookie Sent
 				return False
@@ -236,61 +240,49 @@ class RequestHandler():
 	def setstatuscodeandtype(self, status_code):
 		self.status_code = status_code
 		self.status_type = STATUS[status_code]
-
+		
 	def GET_method(self):
-
+		if self.path in CONFIDENTIAL:
+			try :
+				x = self.headers["authorization"]
+				# x = x.split("Base ")
+				print(x)
+				x = x.split("Basic ")
+				print(x)
+				data = base64.b64decode(x[1])
+				print(data)
+				data = data.decode()
+				print(data)
+				# print("intermidiate : ", data)
+				data = data.split(":")
+				print(data)
+				if not (data[0] == USER and data[1] == PASSWORD):
+					self.setstatuscodeandtype(403)
+					return self.error_handler()
+			except KeyError:
+				self.setstatuscodeandtype(401)
+				return self.error_handler()
 		cookie = self.cookie_handler()			
 
 		# About 304 response header fields
 		# https://tools.ietf.org/html/rfc7232#section-4.1
-		try :
-			should_use = True
-			# print('if-match : ', self.headers['if-match'])
-			print('if-none-match : ', self.headers["if-none-match"])
-			print(' etag : ', self.getetag())
-			if self.headers['if-none-match'] == self.getetag():
-				print("GET 1.1")
-				should_use = False
-				self.setstatuscodeandtype(304)
-				response_headers = f"{self.response_line()}{CRLF}{cookie}Connection: {self.connection}{CRLF}Date: {self.gmtime}{CRLF}Server: {SERVER_NAME}{CRLF}{CRLF}"
-				return [response_headers.encode()]
-			else:
-				print("GET 1.2")
-				should_use = False
-				self.setstatuscodeandtype(412)
-				return self.error_handler()
-
-			# We must ignore 'if-modified-since' if 'if-none-match' exists in request headers
-			# This is the purpose of should_use
-
-			if should_use and self.headers['if-modified-since'] == last_modified_time(self.path):
-				print("GET 1.3	")
-				self.setstatuscodeandtype(304)
-				response_headers = f"{self.response_line()}{CRLF}Connection: {self.connection}{CRLF}{cookie}Date: {self.gmtime}{CRLF}Server: {SERVER_NAME}{CRLF}{CRLF}"
-				return [response_headers.encode()]
-			else :
-				print("GET 1.4")
-				self.setstatuscodeandtype(412)
-				return self.error_handler()
-
-		except KeyError:
-			print("Exception 2")
-			pass			
-		print("GET METHOD CALLED")
+		
 		success = self.readfile()
 		if not success:
-			print("Request was unsuccessful")
+			# print("Request was unsuccessful")
 			return self.error_handler()
 		# response_headers = f"{d.getstatus()}\r\n{d.acceptranges()}\r\n{d.getconnection()}\r\nDate: {d.gettime()}\r\nServer: {SERVER_NAME}\r\nContent-Length: {d.getcontentlength()}\r\nContent-Type: {d.getcontenttype()}\r\n\r\n"
-		print(f"GET method for : {self.path}")
-		print(f"Setting etag : {self.getetag()}")
+		# print(f"GET method for : {self.path}")
+		# print(f"Setting etag : {self.getetag()}")
+
+	
 		response_headers = f"{self.response_line()}{CRLF}Connection: {self.connection}{CRLF}Accept-Ranges: bytes{CRLF}Date: {self.gmtime}{CRLF}Server: {SERVER_NAME}{CRLF}Content-Length: {self.content_length}{CRLF}Content-Type: {self.content_type}{CRLF}ETag: {self.getetag()}{CRLF}Last-Modified: {last_modified_time(self.path)}{CRLF}{CRLF}"
 		response_body = self.content
 		self.logdata()
 		return [response_headers.encode(), response_body]
 
 	def POST_method(self):
-		print("POST METHOD CALLED")
+		# print("POST METHOD CALLED")
 		cookie = self.cookie_handler()
 		params = ''
 		if self.parameters:
@@ -298,13 +290,12 @@ class RequestHandler():
 				if self.headers["content-type"] == "application/x-www-form-urlencoded":
 					params = urllib.parse.parse_qs(self.parameters)
 					self.parsed = params
-				else: # multipart-form data
-					print(f"MULTIPART FORM DATA : {self.parameters}")
+				else:
 					self.setstatuscodeandtype(201)
 					response_headers = f"{self.response_line()}{CRLF}Connection: {self.connection}{CRLF}Accept-Ranges: bytes{CRLF}{cookie}Date: {self.gmtime}Server: {SERVER_NAME}{CRLF}{CRLF}"
 					return [response_headers.encode()]
 			except KeyError:
-				print("Exception 3")
+				# print("Exception 3")
 				params = urllib.parse.parse_qs(self.parameters)
 		else:
 			# Use proper error here
@@ -326,7 +317,7 @@ class RequestHandler():
 
 	def HEAD_method(self):
 		cookie = self.cookie_handler()
-		print("HEAD METHOD CALLED")
+		# print("HEAD METHOD CALLED")
 		success = self.readfile(only_length=True)
 		if not success:
 			return self.error_handler()
@@ -336,7 +327,7 @@ class RequestHandler():
 
 	def DELETE_method(self):
 		cookie = self.cookie_handler()
-		print("DELETE METHOD CALLED")
+		# print("DELETE METHOD CALLED")
 		b = os.path.exists(self.path)
 		if b:
 			# Not all files can be deleted
@@ -355,8 +346,8 @@ class RequestHandler():
 				return [response_headers.encode(), response_body.encode()]
 
 			except IsADirectory:
-				print("Exception 4")
-				print("Directory Cannot be removed")
+				# print("Exception 4")
+				# print("Directory Cannot be removed")
 				self.setstatuscodeandtype(405)
 				return self.error_handler()
 
@@ -368,24 +359,24 @@ class RequestHandler():
 
 	def PUT_method(self):
 		cookie = self.cookie_handler()
-		print("PUT METHOD CALLED")
+		# print("PUT METHOD CALLED")
 
 		b = os.path.exists(self.path) # Check if resource already exists
 		
 		# An origin server that allows PUT on a given target resource MUST send
 		#  a 400 (Bad Request) response to a PUT request that contains a
 		#  Content-Range header field (Section 4.2 of [RFC7233])
-		print(self.headers)
+		# print(self.headers)
 		try :
 			self.headers["content-range"]
 			self.setstatuscodeandtype(400)
 			
-			print("Here We Go Again")
+			# print("Here We Go Again")
 			return self.error_handler()
 
 		except KeyError:
-			print("Exception 5")
-			print("Key Error")
+			# print("Exception 5")
+			# print("Key Error")
 			pass
 
 		if self.path in NON_EDITABLE:
@@ -394,8 +385,11 @@ class RequestHandler():
 			self.setstatuscodeandtype(405)
 			
 			return self.error_handler()
-		
 		try:
+			print(f"For PUT self.path = {self.path}")
+			p4 = f"{self.path}"
+			path = pathlib.Path(p4)
+			path.parent.mkdir(parents=True, exist_ok=True)
 			with open(self.path, 'w') as f:
 				f.write(self.parameters)
 			
@@ -407,7 +401,8 @@ class RequestHandler():
 				self.setstatuscodeandtype(201)
 			
 		except Exception as e:
-			print("Exception 6")
+
+			# print("Exception 6")
 			print(f"Exception {e} has occured in PUT")
 			self.setstatuscodeandtype(500)
 			
@@ -418,14 +413,18 @@ class RequestHandler():
 		return [response_headers.encode()]
 
 	def INVALID_method(self):
-		print("INVALID METHOD CALLED")
+		# print("INVALID METHOD CALLED")
 		# self.logdata()
 		return self.error_handler()
 
 	def error_handler(self):
-		print(f"error_handler METHOD CALLED FOR {self.status_code} - {self.status_type}")
+		# print(f"error_handler METHOD CALLED FOR {self.status_code} - {self.status_type}")
 		self.readfile(is_error=True)
-		response_headers= f"{self.response_line()}{CRLF}Connection: {self.connection}{CRLF}Content-Type: {self.content_type}{CRLF}Content-Length: {self.content_length}{CRLF}Date: {self.gmtime}{CRLF}Server: {SERVER_NAME}{CRLF}{CRLF}"
+		response_headers= f"{self.response_line()}{CRLF}Connection: {self.connection}{CRLF}Content-Type: {self.content_type}{CRLF}Content-Length: {self.content_length}{CRLF}Date: {self.gmtime}{CRLF}Server: {SERVER_NAME}{CRLF}"
+		
+		if self.status_code == 401:
+			response_headers += f"WWW-Authenticate: Basic realm=\"User Visible Realm\", charset=\"UTF-8\"{CRLF}"
+
 		response_body = self.content
 		self.logdata()
 		return [response_headers.encode(), response_body.encode()]
@@ -449,7 +448,7 @@ class RequestHandler():
 				request_method = getattr(self, '%s_method' % self.method)
 
 			except AttributeError:
-				print("Exception 8")
+				# print("Exception 8")
 				self.logdata(error=1)
 				request_method = self.INVALID_method
 
